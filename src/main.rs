@@ -22,6 +22,22 @@ impl Worker for Produser {
     }
 }
 
+struct Consumer {
+    receiver: mpsc::Receiver<u32>,
+}
+
+impl Consumer {
+    fn new(receiver: mpsc::Receiver<u32>) -> Consumer {
+        Consumer { receiver: receiver }
+    }
+}
+
+impl Worker for Consumer {
+    fn execute(&self) {
+        println!("recv {}", self.receiver.recv().unwrap());
+    }
+}
+
 fn main() {
     let (sender, receiver) = mpsc::channel();
 
@@ -38,8 +54,24 @@ fn main() {
         }));
     }
 
+    let mut consumers: Vec<Consumer> = vec![];
+    for _ in 0..3 {
+        let receiver = receiver.clone();
+        consumers.push(Consumer::new(receiver));
+    }
+
+    let mut cons_handlers: Vec<thread::JoinHandle<()>> = vec![];
+    for cons in consumers {
+        cons_handlers.push(thread::spawn(move || {
+            cons.execute();
+        }));
+    }
+
     for handler in prod_handlers {
-        println!("recv: {}", receiver.recv().unwrap());
+        handler.join().unwrap();
+    }
+
+    for handler in cons_handlers {
         handler.join().unwrap();
     }
 }
