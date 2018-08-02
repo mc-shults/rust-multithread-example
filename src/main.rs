@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 use std::sync::mpsc;
 use std::thread;
 
@@ -32,8 +31,4 @@ fn main() {
     }
 
     //let (sender, receiver) = mpsc::channel();
-=======
-fn main() {
-    println!("Hello, world!");
->>>>>>> parent of 7905500... test methods
 }
