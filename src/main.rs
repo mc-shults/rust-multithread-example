@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+use std::sync::mpsc;
 use std::thread;
 
 trait Worker {
@@ -12,32 +14,26 @@ impl Worker for Produser {
     }
 }
 
-fn run<T>(obj: T)
-// -> thread::JoinHandle<()>
-where
-    T: Worker + Send,
-{
-    obj.execute();
-    //thread::spawn(move || {
-    //    obj.execute();
-    //})
-}
-
-fn say_hello() {
-    println!("Hello, world!")
-}
-
 fn main() {
-    say_hello();
-    println!("Hello, world!");
-    let child = thread::spawn(move || {
-        println!("New thread :)");
-    });
-    child.join().unwrap();
-    let p = Produser {};
+    let mut produsers: Vec<Produser> = vec![];
+    for _ in 1..3 {
+        produsers.push(Produser {});
+    }
 
-    let child1 = thread::spawn(move || {
-        p.execute();
-    });
-    child1.join().unwrap();
+    let mut prod_handlers: Vec<thread::JoinHandle<()>> = vec![];
+    for prod in produsers {
+        prod_handlers.push(thread::spawn(move || {
+            prod.execute();
+        }));
+    }
+
+    for handler in prod_handlers {
+        handler.join().unwrap();
+    }
+
+    //let (sender, receiver) = mpsc::channel();
+=======
+fn main() {
+    println!("Hello, world!");
+>>>>>>> parent of 7905500... test methods
 }
