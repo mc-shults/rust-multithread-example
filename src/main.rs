@@ -1,4 +1,5 @@
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 trait Worker {
@@ -23,18 +24,20 @@ impl Worker for Produser {
 }
 
 struct Consumer {
-    receiver: mpsc::Receiver<u32>,
+    receiver: Arc<Mutex<mpsc::Receiver<u32>>>,
 }
 
 impl Consumer {
-    fn new(receiver: mpsc::Receiver<u32>) -> Consumer {
+    fn new(receiver: Arc<Mutex<mpsc::Receiver<u32>>>) -> Consumer {
         Consumer { receiver: receiver }
     }
 }
 
 impl Worker for Consumer {
     fn execute(&self) {
-        println!("recv {}", self.receiver.recv().unwrap());
+        loop {
+            println!("recv {}", (*self.receiver.lock().unwrap()).recv().unwrap());
+        }
     }
 }
 
@@ -54,10 +57,10 @@ fn main() {
         }));
     }
 
+    let receiver = Arc::new(Mutex::new(receiver));
     let mut consumers: Vec<Consumer> = vec![];
     for _ in 0..3 {
-        let receiver = receiver.clone();
-        consumers.push(Consumer::new(receiver));
+        consumers.push(Consumer::new(receiver.clone()));
     }
 
     let mut cons_handlers: Vec<thread::JoinHandle<()>> = vec![];
