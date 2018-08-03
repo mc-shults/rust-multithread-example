@@ -1,4 +1,7 @@
-use std::sync::mpsc;
+extern crate rand;
+
+use rand::random;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -8,13 +11,13 @@ trait Worker {
 }
 
 struct Produser {
-    sender: mpsc::Sender<thread::ThreadId>,
+    sender: Sender<u8>,
     duration: Duration,
     count: u64,
 }
 
 impl Produser {
-    fn new(sender: mpsc::Sender<thread::ThreadId>, duration: Duration, count: u64) -> Produser {
+    fn new(sender: Sender<u8>, duration: Duration, count: u64) -> Produser {
         Produser {
             sender: sender,
             duration: duration,
@@ -28,7 +31,7 @@ impl Worker for Produser {
         loop {
             let id = thread::current().id();
             for _ in 0..self.count {
-                self.sender.send(id).unwrap();
+                self.sender.send(random()).unwrap();
             }
             println!("Produse! {:?}", id);
             thread::sleep(self.duration);
@@ -37,11 +40,11 @@ impl Worker for Produser {
 }
 
 struct Consumer {
-    receiver: Arc<Mutex<mpsc::Receiver<thread::ThreadId>>>,
+    receiver: Arc<Mutex<Receiver<u8>>>,
 }
 
 impl Consumer {
-    fn new(receiver: Arc<Mutex<mpsc::Receiver<thread::ThreadId>>>) -> Consumer {
+    fn new(receiver: Arc<Mutex<Receiver<u8>>>) -> Consumer {
         Consumer { receiver: receiver }
     }
 }
@@ -58,12 +61,12 @@ impl Worker for Consumer {
 }
 
 fn main() {
-    let (sender, receiver) = mpsc::channel();
+    let (sender, receiver) = channel();
 
     let mut produsers: Vec<Produser> = vec![];
-    for i in 0..5 {
+    for i in 0..2 {
         let sender = sender.clone();
-        produsers.push(Produser::new(sender, Duration::from_secs(i + 1), 5 - i));
+        produsers.push(Produser::new(sender, Duration::from_secs(i * 3 + 1), 5 - i));
     }
 
     let mut prod_handlers: Vec<thread::JoinHandle<()>> = vec![];
@@ -75,7 +78,7 @@ fn main() {
 
     let receiver = Arc::new(Mutex::new(receiver));
     let mut consumers: Vec<Consumer> = vec![];
-    for _ in 0..3 {
+    for _ in 0..2 {
         consumers.push(Consumer::new(receiver.clone()));
     }
 
