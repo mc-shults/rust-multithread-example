@@ -1,34 +1,47 @@
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 trait Worker {
     fn execute(&self);
 }
 
 struct Produser {
-    sender: mpsc::Sender<u32>,
+    sender: mpsc::Sender<thread::ThreadId>,
+    duration: Duration,
+    count: u64,
 }
 
 impl Produser {
-    fn new(sender: mpsc::Sender<u32>) -> Produser {
-        Produser { sender: sender }
+    fn new(sender: mpsc::Sender<thread::ThreadId>, duration: Duration, count: u64) -> Produser {
+        Produser {
+            sender: sender,
+            duration: duration,
+            count: count,
+        }
     }
 }
 
 impl Worker for Produser {
     fn execute(&self) {
-        self.sender.send(5).unwrap();
-        println!("Produse!");
+        loop {
+            let id = thread::current().id();
+            for _ in 0..self.count {
+                self.sender.send(id).unwrap();
+            }
+            println!("Produse! {:?}", id);
+            thread::sleep(self.duration);
+        }
     }
 }
 
 struct Consumer {
-    receiver: Arc<Mutex<mpsc::Receiver<u32>>>,
+    receiver: Arc<Mutex<mpsc::Receiver<thread::ThreadId>>>,
 }
 
 impl Consumer {
-    fn new(receiver: Arc<Mutex<mpsc::Receiver<u32>>>) -> Consumer {
+    fn new(receiver: Arc<Mutex<mpsc::Receiver<thread::ThreadId>>>) -> Consumer {
         Consumer { receiver: receiver }
     }
 }
@@ -36,7 +49,10 @@ impl Consumer {
 impl Worker for Consumer {
     fn execute(&self) {
         loop {
-            println!("recv {}", (*self.receiver.lock().unwrap()).recv().unwrap());
+            println!(
+                "recv {:?}",
+                (*self.receiver.lock().unwrap()).recv().unwrap()
+            );
         }
     }
 }
@@ -45,9 +61,9 @@ fn main() {
     let (sender, receiver) = mpsc::channel();
 
     let mut produsers: Vec<Produser> = vec![];
-    for _ in 0..5 {
+    for i in 0..5 {
         let sender = sender.clone();
-        produsers.push(Produser::new(sender));
+        produsers.push(Produser::new(sender, Duration::from_secs(i + 1), 5 - i));
     }
 
     let mut prod_handlers: Vec<thread::JoinHandle<()>> = vec![];
