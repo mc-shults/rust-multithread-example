@@ -1,7 +1,7 @@
 extern crate rand;
 
 use rand::random;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -11,17 +11,17 @@ trait Worker {
 }
 
 struct Produser {
-    sender: Sender<u8>,
     duration: Duration,
     count: u64,
+    deque: Arc<Mutex<VecDeque<u8>>>,
 }
 
 impl Produser {
-    fn new(sender: Sender<u8>, duration: Duration, count: u64) -> Produser {
+    fn new(duration: Duration, count: u64, mutex: Arc<Mutex<VecDeque<u8>>>) -> Produser {
         Produser {
-            sender: sender,
             duration: duration,
             count: count,
+            deque: mutex,
         }
     }
 }
@@ -29,23 +29,27 @@ impl Produser {
 impl Worker for Produser {
     fn execute(&self) {
         loop {
+            let mut deque = self.deque.lock().unwrap();
             let id = thread::current().id();
+            print!("Produse {:?}: ", id);
             for _ in 0..self.count {
-                self.sender.send(random()).unwrap();
+                let value = random();
+                print!("{} ", value);
+                (*deque).push_back(value);
             }
-            println!("Produse! {:?}", id);
+            println!("");
             thread::sleep(self.duration);
         }
     }
 }
 
 struct Consumer {
-    receiver: Arc<Mutex<Receiver<u8>>>,
+    deque: Arc<Mutex<VecDeque<u8>>>,
 }
 
 impl Consumer {
-    fn new(receiver: Arc<Mutex<Receiver<u8>>>) -> Consumer {
-        Consumer { receiver: receiver }
+    fn new(deque: Arc<Mutex<VecDeque<u8>>>) -> Consumer {
+        Consumer { deque: deque }
     }
 }
 
@@ -54,19 +58,22 @@ impl Worker for Consumer {
         loop {
             println!(
                 "recv {:?}",
-                (*self.receiver.lock().unwrap()).recv().unwrap()
+                (*self.deque.lock().unwrap()).pop_front().unwrap()
             );
         }
     }
 }
 
 fn main() {
-    let (sender, receiver) = channel();
+    let deque: Arc<Mutex<VecDeque<u8>>> = Arc::new(Mutex::new(VecDeque::new()));
 
     let mut produsers: Vec<Produser> = vec![];
     for i in 0..2 {
-        let sender = sender.clone();
-        produsers.push(Produser::new(sender, Duration::from_secs(i * 3 + 1), 5 - i));
+        produsers.push(Produser::new(
+            Duration::from_secs(i * 3 + 1),
+            5 - i,
+            deque.clone(),
+        ));
     }
 
     let mut prod_handlers: Vec<thread::JoinHandle<()>> = vec![];
@@ -76,10 +83,9 @@ fn main() {
         }));
     }
 
-    let receiver = Arc::new(Mutex::new(receiver));
     let mut consumers: Vec<Consumer> = vec![];
     for _ in 0..2 {
-        consumers.push(Consumer::new(receiver.clone()));
+        consumers.push(Consumer::new(deque.clone()));
     }
 
     let mut cons_handlers: Vec<thread::JoinHandle<()>> = vec![];
